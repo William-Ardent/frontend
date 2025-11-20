@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mental Health Billing — Jobs Scraper</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f8fb; --panel:#ffffff; --muted:#6b7280; --accent:#0b5ed7; --accent-2:#0758c7; --success:#10b981; --danger:#ef4444;
+    --card-radius:14px; --shadow:0 6px 18px rgba(16,24,40,0.08);
+    color-scheme: light;
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:var(--bg);color:#0f1724}
+  .container{max-width:1200px;margin:0 auto;padding:28px}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+  .brand{display:flex;gap:14px;align-items:center}
+  .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800}
+  h1{margin:0;font-size:18px;font-weight:800}
+  .top-right{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:1fr 360px;gap:18px}
+  .row-cards{display:flex;gap:18px;margin-bottom:18px}
+  .stat-card{background:var(--panel);border-radius:var(--card-radius);padding:20px;width:100%;box-shadow:var(--shadow);display:flex;flex-direction:column;justify-content:center}
+  .stat-meta{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .stat-value{font-size:28px;font-weight:800}
+  .stat-sub{font-size:13px;color:var(--muted);margin-top:8px;display:flex;gap:8px;align-items:center}
+  .big-panel{background:var(--panel);border-radius:var(--card-radius);box-shadow:var(--shadow);padding:20px}
+  .run-now{display:flex;flex-direction:column;gap:12px}
+  .run-button{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:none;padding:14px 20px;border-radius:10px;font-weight:700;font-size:16px;cursor:pointer;box-shadow:0 6px 14px rgba(11,94,215,0.18)}
+  .small{font-size:13px;color:var(--muted)}
+  .right-card{background:var(--panel);border-radius:var(--card-radius);box-shadow:var(--shadow);padding:16px}
+  .activity-item{padding:12px;border-radius:10px;border:1px solid rgba(15,23,36,0.03);margin-bottom:10px}
+  .status-badge{padding:6px 8px;border-radius:999px;color:#fff;font-weight:700;font-size:12px}
+  .badge-success{background:var(--success)}
+  .badge-fail{background:var(--danger)}
+  .controls{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .search{padding:8px 10px;border-radius:8px;border:1px solid #e6eef6;background:#fbfdff}
+  table{width:100%;border-collapse:collapse;margin-top:12px;background:transparent}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #f1f5f9;font-size:14px;color:#0f1724}
+  th{font-weight:700;color:#374151}
+  .table-wrap{background:var(--panel);padding:12px;border-radius:12px;box-shadow:var(--shadow)}
+  .btn-ghost{background:transparent;border:1px solid #e6eef6;padding:8px 10px;border-radius:8px;cursor:pointer}
+  .chip{padding:6px 8px;border-radius:999px;background:#f1f5f9;color:#111827;font-weight:600;font-size:12px}
+  .footer{margin-top:18px;color:var(--muted);font-size:13px}
+
+  /* lock screen */
+  #lockScreen{max-width:520px;margin:28px auto;background:var(--panel);padding:20px;border-radius:12px;box-shadow:var(--shadow)}
+  input[type="password"], textarea, input[type="text"], select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef6}
+  .modal-bg{position:fixed;inset:0;background:rgba(2,6,23,0.45);display:flex;align-items:center;justify-content:center;z-index:60}
+  .modal{width:min(920px,96%);background:#fff;border-radius:12px;padding:18px;max-height:80vh;overflow:auto;box-shadow:var(--shadow)}
+
+  /* responsive */
+  @media (max-width:1000px){
+    .grid{grid-template-columns:1fr}
+    .row-cards{flex-direction:column}
+    .right-card{order:2}
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">MH</div>
+        <div>
+          <h1>Mental Health Billing — Jobs Scraper</h1>
+          <div class="small">Admin Dashboard</div>
+        </div>
+      </div>
+      <div class="top-right">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 12a3 3 0 100-6 3 3 0 000 6z" fill="#9CA3AF"/><path d="M12 14c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z" fill="#D1D5DB"/></svg><span class="small">Admin</span></div>
+          <button class="btn-ghost" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- lock screen -->
+    <div id="lockScreen" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div><strong>Unlock Dashboard</strong><div class="small" style="margin-top:6px">Enter admin passphrase to continue</div></div>
+      </div>
+      <input id="adminPass" type="password" placeholder="Enter passphrase" style="margin-bottom:12px"/>
+      <div style="display:flex;gap:8px">
+        <button class="run-button" id="unlockBtn">Unlock</button>
+        <button class="btn-ghost" id="useMockBtn">Use Mock</button>
+      </div>
+      <div class="small" style="margin-top:10px">Tip: default passphrase is <code>admin123</code>. Change in CONFIG before production.</div>
+    </div>
+
+    <!-- main app -->
+    <div id="app" style="display:none">
+      <div class="row-cards" style="margin-bottom:18px">
+        <div style="flex:1;display:flex;gap:18px">
+          <div class="stat-card" style="flex:1">
+            <div class="stat-meta">LAST RUN STATUS</div>
+            <div id="lastRunStatus" class="stat-value">—</div>
+            <div class="stat-sub" id="statusSub"><span class="small">Operational</span></div>
+          </div>
+
+          <div class="stat-card" style="width:220px">
+            <div class="stat-meta">LAST RUN TIME</div>
+            <div id="lastRunTime" class="stat-value">—</div>
+            <div class="stat-sub small" id="lastRunSub">—</div>
+          </div>
+
+          <div class="stat-card" style="width:180px">
+            <div class="stat-meta">TOTAL RESULTS</div>
+            <div id="statTotal" class="stat-value">0</div>
+            <div class="stat-sub small">All-time</div>
+          </div>
+
+          <div class="stat-card" style="width:180px">
+            <div class="stat-meta">NEW RESULTS</div>
+            <div id="statNew" class="stat-value">0</div>
+            <div class="stat-sub small">Since last run</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- left: main panels -->
+        <div>
+          <div class="big-panel" style="margin-bottom:18px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+              <div>
+                <div style="font-size:18px;font-weight:800;margin-bottom:6px">Run Scraper</div>
+                <div class="small">Manually trigger a new job scraping run or view the next scheduled run</div>
+                <div class="small" id="nextScheduled" style="margin-top:8px"></div>
+              </div>
+              <div style="min-width:320px;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+                <button id="runNowBtn" class="run-button">▶ Run Now</button>
+                <div class="small" id="runProgress"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="big-panel table-wrap">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;gap:8px;align-items:center">
+                <input id="searchInput" class="search" placeholder="Search title, company, email..." />
+                <select id="sourceFilter" class="search"><option value="">All Sources</option></select>
+                <button class="btn-ghost" id="exportCsvBtn">Export CSV</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <div class="small">Page size</div>
+                <select id="pageSizeSelect" class="search"><option>10</option><option>25</option><option>50</option></select>
+              </div>
+            </div>
+
+            <table aria-label="Results table">
+              <thead>
+                <tr><th>Title</th><th>Company</th><th>Location</th><th>Email</th><th>URL</th></tr>
+              </thead>
+              <tbody id="resultsTbody"></tbody>
+            </table>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+              <div id="pagingInfo" class="small">0 results</div>
+              <div>
+                <button class="btn-ghost" id="prevPage">Prev</button>
+                <button class="btn-ghost" id="nextPage">Next</button>
+                <button class="btn-ghost" id="openAdmin">Admin</button>
+                <button class="btn-ghost" id="openLogs">Logs</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- right: recent activity -->
+        <aside>
+          <div class="right-card">
+            <div style="font-weight:800;margin-bottom:8px">Recent Activity</div>
+            <div id="activityList">
+              <!-- activity items injected -->
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="footer">Built for: job-scraper pipeline</div>
+
+    </div>
+  </div>
+
+  <!-- modal root & toast -->
+  <div id="modalRoot" style="display:none"></div>
+  <div id="toastRoot" style="position:fixed;right:18px;bottom:18px;z-index:60"></div>
+
+<script>
+/* CONFIG - update these for production */
+const CONFIG = {
+  USE_MOCK: true,                    // set false to call real backend
+  ADMIN_PASSWORD: 'admin123',        // change immediately for production
+  WEBHOOK_RUN: 'http://165.227.31.86:5678/webhook/run-scraper',
+  API_BASE: 'https://example.com/api',
+  POLL_RUN_STATUS_MS: 2000
+};
+
+
+/* localstorage keys & state */
+const LS_KEYS = { RESULTS:'mh_results_v2', RUNS:'mh_runs_v2', ADMIN:'mh_admin_v2', AUTH:'mh_unlocked_v2', USE_MOCK:'mh_use_mock_v2' };
+let state = { results:[], runs:[], admin:{ includeKeywords:["medical billing mental health","behavioral health billing","insurance billing \"mental health\""], excludeKeywords:["hospital","inpatient","acute","facility","pharmacy","radiology","lab","surgical","front desk","records"], sources:{GoogleJobs:true,LinkedIn:true,Indeed:true,ZipRecruiter:true}, runFrequency:'daily' }, page:1, pageSize:10, search:'', sourceFilter:'', useMock:CONFIG.USE_MOCK };
+
+/* helpers */
+function saveLS(){ localStorage.setItem(LS_KEYS.RESULTS, JSON.stringify(state.results)); localStorage.setItem(LS_KEYS.RUNS, JSON.stringify(state.runs)); localStorage.setItem(LS_KEYS.ADMIN, JSON.stringify(state.admin)); localStorage.setItem(LS_KEYS.USE_MOCK, JSON.stringify(state.useMock)); }
+function loadLS(){ try{ const r=JSON.parse(localStorage.getItem(LS_KEYS.RESULTS)||'null'); const runs=JSON.parse(localStorage.getItem(LS_KEYS.RUNS)||'null'); const admin=JSON.parse(localStorage.getItem(LS_KEYS.ADMIN)||'null'); const um=JSON.parse(localStorage.getItem(LS_KEYS.USE_MOCK)||'null'); if(Array.isArray(r)) state.results=r; if(Array.isArray(runs)) state.runs=runs; if(admin) state.admin=admin; if(typeof um==='boolean') state.useMock=um; }catch(e){console.warn(e);} }
+function id(){ return 'r_'+Math.random().toString(36).slice(2,9); }
+function toast(msg, t=3000){ const root=document.getElementById('toastRoot'); root.innerHTML=''; const d=document.createElement('div'); d.style.background='#0b1220'; d.style.color='#fff'; d.style.padding='10px 14px'; d.style.borderRadius='10px'; d.style.boxShadow='0 6px 18px rgba(2,6,23,0.4)'; d.textContent=msg; root.appendChild(d); setTimeout(()=>{root.innerHTML=''}, t); }
+
+/* render functions */
+function renderAuth(){
+  const unlocked = localStorage.getItem(LS_KEYS.AUTH) === 'true';
+  document.getElementById('lockScreen').style.display = unlocked ? 'none' : 'block';
+  document.getElementById('app').style.display = unlocked ? 'block' : 'none';
+}
+function renderStats(){
+  document.getElementById('statTotal').textContent = state.results.length;
+  const last = state.runs[state.runs.length-1];
+  document.getElementById('lastRunStatus').textContent = last ? (last.status==='success' ? 'Success' : (last.status==='running'?'Running':'Failed')) : '—';
+  document.getElementById('lastRunTime').textContent = last ? new Date(last.timestamp).toLocaleString() : '—';
+  document.getElementById('statNew').textContent = last ? (last.newRows||0) : 0;
+  document.getElementById('statusSub').innerHTML = last ? `<span class="small">${last.status}</span>` : '<span class="small">No runs yet</span>';
+  document.getElementById('nextScheduled').textContent = state.admin.runFrequency==='daily' ? 'Next scheduled run: Today at 6:00 PM' : 'Schedule: ' + state.admin.runFrequency;
+}
+function renderSourceFilter(){
+  const sel = document.getElementById('sourceFilter'); sel.innerHTML = '<option value="">All Sources</option>';
+  const sset = new Set(state.results.map(r=>r.source)); Object.keys(state.admin.sources).forEach(s=>sset.add(s));
+  Array.from(sset).forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
+}
+function renderResults(){
+  const tbody = document.getElementById('resultsTbody'); tbody.innerHTML = '';
+  const search = state.search.toLowerCase();
+  let filtered = state.results.filter(r=>{
+    if(state.sourceFilter && r.source !== state.sourceFilter) return false;
+    if(search){
+      return (r.title||'').toLowerCase().includes(search) || (r.company||'').toLowerCase().includes(search) || (r.email||'').toLowerCase().includes(search);
+    }
+    return true;
+  });
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total/state.pageSize));
+  if(state.page > pages) state.page = pages;
+  const start = (state.page-1)*state.pageSize;
+  const pageItems = filtered.slice(start, start+state.pageSize);
+  pageItems.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td><a href="#" data-id="${r.id}" class="openJob">${escapeHtml(r.title)}</a></td>
+      <td>${escapeHtml(r.company)}</td>
+      <td>${escapeHtml(r.location)}</td>
+      <td>${r.email ? '<a href="mailto:${escapeAttr(r.email)}">${escapeHtml(r.email)}</a>' : ''}</td>
+      <td>${r.url ? '<a href="'+escapeAttr(r.url)+'" target="_blank">Open</a>' : ''}</td>
+    `;
+
+
+    tbody.appendChild(tr);
+  });
+  document.getElementById('pagingInfo').textContent = `${total} results • Page ${state.page} of ${Math.max(1,Math.ceil(total/state.pageSize))}`;
+  document.querySelectorAll('.viewBtn').forEach(b=>b.onclick = e=>openJob(e.target.dataset.id));
+  document.querySelectorAll('.openJob').forEach(a=>a.onclick = ev=>{ ev.preventDefault(); openJob(ev.target.dataset.id); });
+}
+function renderActivity(){
+  const root = document.getElementById('activityList'); root.innerHTML = '';
+  const items = state.runs.slice().reverse().slice(0,6);
+  if(items.length===0){ root.innerHTML = '<div class="small">No activity yet</div>'; return; }
+  items.forEach(it=>{
+    const d=document.createElement('div'); d.className='activity-item';
+    const badge = it.status==='success' ? `<span class="status-badge badge-success">success</span>` : `<span class="status-badge badge-fail">failed</span>`;
+    d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+      <div>${badge}</div>
+      <div class="small">${new Date(it.timestamp).toLocaleString()}</div>
+    </div>
+    <div style="margin-top:8px">${it.total||0} results, ${it.newRows||0} new${it.errors?', '+it.errors+' errors':''}</div>`;
+    root.appendChild(d);
+  });
+}
+
+/* modals & job view */
+function openJob(id){
+  const job = state.results.find(x=>x.id===id); if(!job) return;
+  const root = document.getElementById('modalRoot'); root.style.display='block';
+  root.innerHTML = `<div class="modal-bg"><div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${escapeHtml(job.title)}</strong><div class="small">${escapeHtml(job.company)} • ${escapeHtml(job.location)}</div></div><div><button class="btn-ghost" id="closeModal">Close</button></div></div>
+    <hr style="margin:12px 0;border:none;border-top:1px solid #eef2f7" />
+    <div style="white-space:pre-wrap">${escapeHtml(job.description||'')}</div>
+    <div style="margin-top:12px;display:flex;gap:8px"><a class="run-button" href="${escapeAttr(job.url)}" target="_blank">Open Posting</a>${job.email?'<a class="btn-ghost" href="mailto:'+escapeAttr(job.email)+'">Email</a>':''}</div>
+  </div></div>`;
+  document.getElementById('closeModal').onclick = ()=>{ root.style.display='none'; root.innerHTML=''; };
+}
+
+/* CSV export */
+function exportCsv(){
+  const headers = ['Job Title', 'Company', 'Location', 'Email', 'URL'];
+
+  const rows = state.results.map(r => [
+    r.title || '',
+    r.company || '',
+    r.location || '',
+    r.email || '',
+    r.url || ''
+  ]);
+
+  const csv = [headers, ...rows].map(row=>row.map(cell=>`"${(''+cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='results.csv'; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* run now */
+async function doRunNow(manual=true){
+  const runId = id(); const runRec = {id:runId,timestamp:new Date().toISOString(),status:'running',total:state.results.length,newRows:0,errors:0};
+  state.runs.push(runRec); saveLS(); renderStats(); renderActivity(); toast('Run started');
+  document.getElementById('runNowBtn').disabled = true; document.getElementById('runProgress').textContent = 'Running...';
+  try{
+    if(state.useMock){
+      await new Promise(r=>setTimeout(r,1200));
+      const added=[];
+      const addCount = 1 + Math.floor(Math.random()*3);
+      for(let i=0;i<addCount;i++){
+        const m = JSON.parse(JSON.stringify(MOCK_RESULTS[Math.floor(Math.random()*MOCK_RESULTS.length)]));
+        m.id = id(); m.date = new Date().toISOString().slice(0,10);
+        if(!state.results.some(x=>x.url===m.url)){ state.results.unshift(m); added.push(m); }
+      }
+      runRec.status='success'; runRec.total=state.results.length; runRec.newRows=added.length;
+      saveLS(); toast(`Run finished — ${added.length} new`);
+    }else{
+      const payload = {action:'run',initiatedBy:'admin-dashboard',note: manual?'manual run':'scheduled'};
+      const r = await fetch(CONFIG.WEBHOOK_RUN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!r.ok) throw new Error('Webhook failed '+r.status);
+      const body = await r.json().catch(()=>null);
+      if(body && Array.isArray(body.results)){
+        const added=[]; body.results.forEach(it=>{ if(!state.results.some(x=>x.url===it.url)){ state.results.unshift(it); added.push(it);} });
+        runRec.status='success'; runRec.total=state.results.length; runRec.newRows=added.length; saveLS();
+        toast(`Run finished — ${added.length} new`);
+      }else{
+        // poll /runs and /results (best-effort)
+        let final=null,attempt=0;
+        while(attempt<10){
+          await new Promise(r=>setTimeout(r,CONFIG.POLL_RUN_STATUS_MS)); attempt++;
+          try{ const runsResp = await fetch(CONFIG.API_BASE + '/runs?limit=5'); const runsJson = await runsResp.json(); if(Array.isArray(runsJson) && runsJson.length){ final = runsJson[0]; if(final.status && final.status!=='running') break; } }catch(e){}
+        }
+        if(final && final.status){
+          if(final.status==='success'){
+            try{ const resResp = await fetch(CONFIG.API_BASE + '/results?limit=50&page=1'); const resJson = await resResp.json(); const items = Array.isArray(resJson.items)?resJson.items: (Array.isArray(resJson)?resJson:[]); const added=[]; items.forEach(it=>{ if(!state.results.some(x=>x.url===it.url)){ state.results.unshift(it); added.push(it); } }); runRec.status='success'; runRec.total=state.results.length; runRec.newRows=added.length; saveLS(); toast(`Run finished — ${added.length} new`); }catch(e){ runRec.status='failed'; runRec.errors=1; saveLS(); toast('Run finished but fetching results failed'); }
+          }else{ runRec.status='failed'; runRec.errors=1; saveLS(); toast('Run failed on backend'); }
+        }else{ runRec.status='running'; toast('Run triggered; check server for status'); }
+      }
+    }
+  }catch(err){ console.error(err); runRec.status='failed'; runRec.errors=1; saveLS(); toast('Run error: '+(err.message||err)); }
+  document.getElementById('runNowBtn').disabled = false; document.getElementById('runProgress').textContent = '';
+  state.runs = state.runs.map(r=> r.id===runId?runRec:r );
+  saveLS(); renderStats(); renderResults(); renderActivity();
+}
+
+// fetch results from backend (n8n -> Postgres)
+// Fetch results from n8n (requires /webhook/get-results active)
+async function fetchResults(limit=50, offset=0){
+  try {
+    const res = await fetch(`${CONFIG.API_BASE}/webhook/get-results?limit=${limit}&offset=${offset}`);
+    if(!res.ok) throw new Error('Failed to fetch results');
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch(e) {
+    console.error('fetchResults error', e);
+    return [];
+  }
+}
+
+
+
+/* admin modal */
+function openAdmin(){
+  const root=document.getElementById('modalRoot'); root.style.display='block';
+  root.innerHTML=`<div class="modal-bg"><div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><div><strong>Admin Settings</strong></div><div><button class="btn-ghost" id="closeAdmin">Close</button></div></div><hr style="margin:12px 0;border:none;border-top:1px solid #eef2f7" />
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px"><div class="small">Include keywords (one per line)</div><textarea id="inc" rows=6 style="margin-top:6px"></textarea></div>
+      <div style="flex:1;min-width:240px"><div class="small">Exclude keywords (one per line)</div><textarea id="exc" rows=6 style="margin-top:6px"></textarea></div>
+      <div style="width:220px"><div class="small">Sources</div><div id="sourcesArea" style="margin-top:8px"></div><div class="small" style="margin-top:10px">Run frequency</div><select id="runFreq" style="margin-top:6px"><option value="off">Off</option><option value="on-demand">On-demand</option><option value="daily">Daily</option><option value="hourly">Hourly</option></select></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn-ghost" id="restoreDefault">Restore Defaults</button><button class="run-button" id="saveAdmin">Save</button></div>
+  </div></div>`;
+  document.getElementById('closeAdmin').onclick = ()=>{root.style.display='none';root.innerHTML='';};
+  document.getElementById('inc').value = state.admin.includeKeywords.join('\n');
+  document.getElementById('exc').value = state.admin.excludeKeywords.join('\n');
+  const sa=document.getElementById('sourcesArea'); sa.innerHTML='';
+  Object.keys(state.admin.sources).forEach(s=>{
+    const idn='src_'+s; const label=document.createElement('label'); label.style.display='flex'; label.style.alignItems='center'; label.style.gap='8px'; label.innerHTML=`<input type="checkbox" id="${idn}" ${state.admin.sources[s]?'checked':''}/> ${s}`; sa.appendChild(label);
+  });
+  document.getElementById('runFreq').value = state.admin.runFrequency || 'daily';
+  document.getElementById('saveAdmin').onclick = ()=>{
+    state.admin.includeKeywords = document.getElementById('inc').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    state.admin.excludeKeywords = document.getElementById('exc').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    Object.keys(state.admin.sources).forEach(s=>{ state.admin.sources[s] = !!document.getElementById('src_'+s).checked; });
+    state.admin.runFrequency = document.getElementById('runFreq').value;
+    saveLS(); renderSourceFilter(); toast('Admin saved'); root.style.display='none'; root.innerHTML='';
+  };
+  document.getElementById('restoreDefault').onclick = ()=>{
+    if(!confirm('Restore defaults?')) return;
+    state.admin = { includeKeywords:["medical billing mental health","behavioral health billing","insurance billing \"mental health\""], excludeKeywords:["hospital","inpatient","acute","facility","pharmacy","radiology","lab","surgical","front desk","records"], sources:{GoogleJobs:true,LinkedIn:true,Indeed:true,ZipRecruiter:true}, runFrequency:'daily' };
+    document.getElementById('inc').value = state.admin.includeKeywords.join('\n');
+    document.getElementById('exc').value = state.admin.excludeKeywords.join('\n');
+    saveLS(); toast('Defaults restored');
+  };
+}
+
+/* logs modal */
+function openLogs(){
+  const root=document.getElementById('modalRoot'); root.style.display='block';
+  root.innerHTML=`<div class="modal-bg"><div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><div><strong>Run History</strong></div><div><button class="btn-ghost" id="closeLogs">Close</button></div></div><hr style="margin:12px 0;border:none;border-top:1px solid #eef2f7" /><div id="logsArea"></div></div></div>`;
+  document.getElementById('closeLogs').onclick = ()=>{root.style.display='none';root.innerHTML='';};
+  const la=document.getElementById('logsArea'); la.innerHTML = state.runs.slice().reverse().map(it=>`<div class="card" style="padding:12px;margin-bottom:8px;border-radius:10px;border:1px solid #eef2f7"><div style="display:flex;justify-content:space-between"><div><strong>${new Date(it.timestamp).toLocaleString()}</strong><div class="small">${it.status} • ${it.total||0} total • ${it.newRows||0} new</div></div><div><button class="btn-ghost viewRun" data-id="${it.id}">View</button></div></div></div>`).join('');
+  document.querySelectorAll('.viewRun').forEach(b=>b.onclick = e=>{ const it = state.runs.find(r=>r.id===e.target.dataset.id); alert(JSON.stringify(it,null,2)); });
+}
+
+/* helpers: escape */
+function escapeHtml(s){ if(!s) return ''; return (''+s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+/* wiring UI */
+function wire(){
+  document.getElementById('unlockBtn').onclick = ()=>{ const v=document.getElementById('adminPass').value.trim(); if(v===CONFIG.ADMIN_PASSWORD){ localStorage.setItem(LS_KEYS.AUTH,'true'); renderAuth(); toast('Unlocked'); } else alert('Incorrect passphrase'); };
+  document.getElementById('useMockBtn').onclick = ()=>{ state.useMock = true; localStorage.setItem(LS_KEYS.USE_MOCK, JSON.stringify(true)); document.getElementById('adminPass').value = CONFIG.ADMIN_PASSWORD; document.getElementById('unlockBtn').click(); };
+  document.getElementById('runNowBtn').onclick = ()=> doRunNow(true);
+  document.getElementById('searchInput').oninput = (e)=>{ state.search=e.target.value; state.page=1; renderResults(); };
+  document.getElementById('sourceFilter').onchange = (e)=>{ state.sourceFilter=e.target.value; state.page=1; renderResults(); };
+  document.getElementById('pageSizeSelect').onchange = (e)=>{ state.pageSize=parseInt(e.target.value,10); state.page=1; renderResults(); };
+  document.getElementById('prevPage').onclick = ()=>{ if(state.page>1){ state.page--; renderResults(); } };
+  document.getElementById('nextPage').onclick = ()=>{ state.page++; renderResults(); };
+  document.getElementById('exportCsvBtn').onclick = exportCsv;
+  document.getElementById('openAdmin').onclick = openAdmin;
+  document.getElementById('openLogs').onclick = openLogs;
+  document.getElementById('logoutBtn').onclick = ()=>{ localStorage.removeItem(LS_KEYS.AUTH); location.reload(); };
+}
+
+/* init */
+/* init - PRODUCTION VERSION */
+async function init(){
+  loadLS();
+
+  // Always start with empty results in production
+  state.results = [];
+
+  renderAuth();
+  renderStats();
+  renderSourceFilter();
+  renderResults();
+  renderActivity();
+  wire();
+
+  // Fetch results from backend (n8n -> Aiven)
+  const rows = await fetchResults(100, 0);
+  if(rows.length){
+    state.results = rows.map(r => ({
+      id: r.job_url || r.id || Math.random().toString(36).slice(2),
+      title: r.job_title || '',
+      company: r.company_name || '',
+      location: r.company_location || '',
+      contactName: r.contact_name || '',
+      email: r.email || '',
+      date: r.scraped_at || '',
+      source: r.source || 'apify',
+      url: r.job_url || ''
+    }));
+
+    renderResults();
+    renderActivity();
+  }
+}
+
+/* No auto-unlock, no mock mode in production */
+state.useMock = false;
+
+
+/* expose functions */
+window.doRunNow = doRunNow;
+init();
+</script>
+</body>
+</html>
