@@ -326,6 +326,20 @@ def frontend():
         logger.exception("Error serving frontend: %s", e)
         abort(500)
 
+@app.route("/", methods=["POST"])
+def authenticate():
+    """Handle admin authentication"""
+    payload = request.get_json(silent=True) or {}
+    passphrase = payload.get("passphrase", "").strip()
+    
+    # Use the same password as in frontend CONFIG
+    expected_password = "admin123"
+    
+    if passphrase == expected_password:
+        return jsonify({"ok": True})
+    else:
+        return jsonify({"ok": False, "error": "Incorrect passphrase"}), 401
+
 @app.route("/<path:path>")
 def catch_all(path):
     if os.path.isfile(FRONTEND_PATH):
@@ -417,6 +431,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
