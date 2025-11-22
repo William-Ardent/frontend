@@ -410,7 +410,7 @@ def run_scraper():
     
     # Add this - proper Apify input
     actor_input = {
-        "keywords": "medical billing, mental health billing, behavioral health billing, psychiatry billing",
+        "keywords": "medical billing, healthcare billing, insurance billing, revenue cycle, mental health, behavioral health, psychiatry, therapist, counselor, psychology, healthcare, medical coder, billing specialist",
         "location": "United States", 
         "maxJobs": 50,  # Change to 1 for testing, then 30 later
         "days": 3
@@ -482,6 +482,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
