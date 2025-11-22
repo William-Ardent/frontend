@@ -325,6 +325,12 @@ def frontend():
     except Exception as e:
         logger.exception("Error serving frontend: %s", e)
         abort(500)
+        
+@app.route("/<path:path>")
+def catch_all(path):
+    if os.path.isfile(FRONTEND_PATH):
+        return send_file(FRONTEND_PATH, mimetype="text/html")
+    abort(404)
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -410,3 +416,4 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
