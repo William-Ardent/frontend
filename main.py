@@ -188,16 +188,41 @@ def clearbit_get_domain(company_name: str) -> Optional[str]:
 def hunter_get_emails_for_domain(domain: str):
     if not domain or not HUNTER_API_KEY:
         return []
+    
     url = f"https://api.hunter.io/v2/domain-search?domain={domain}&api_key={HUNTER_API_KEY}"
     try:
         r = requests.get(url, timeout=15)
         if r.status_code != 200:
             logger.warning("Hunter returned %s for domain=%s", r.status_code, domain)
             return []
+        
         data = r.json().get("data", {})
-        emails = [e.get("value") for e in data.get("emails", []) if e.get("value")]
-        logger.info("Hunter found %d emails for domain %s", len(emails), domain)
-        return emails
+        emails = data.get("emails", [])
+        
+        # Prioritize HR/recruitment emails
+        prioritized_emails = []
+        other_emails = []
+        
+        for email_data in emails:
+            email_value = email_data.get("value")
+            if not email_value:
+                continue
+                
+            # Look for HR, recruitment, careers, jobs in the email or position
+            position = email_data.get("position", "").lower()
+            email_local = email_value.split('@')[0].lower()
+            
+            hr_keywords = ['hr', 'recruit', 'career', 'job', 'talent', 'hiring', 'people', 'human resources']
+            if any(keyword in position or any(keyword in email_local for keyword in hr_keywords)):
+                prioritized_emails.append(email_value)
+            else:
+                other_emails.append(email_value)
+        
+        # Return prioritized emails first, then others
+        result = prioritized_emails + other_emails
+        logger.info("Hunter prioritized emails for %s: %s", domain, result)
+        return result
+        
     except Exception as e:
         logger.exception("Hunter lookup failed for %s: %s", domain, e)
         return []
@@ -256,13 +281,12 @@ def process_run(run_id: str, actor_input: dict):
                     errors += 1
                     continue
 
-                # FIX 1: Enhanced duplicate check - check both job_url AND title+company
+                # Duplicate checks...
                 exists = db.query(Result).filter(Result.job_url == job_url).first()
                 if exists:
                     logger.info("Duplicate job_url, skipping: %s", job_url)
                     continue
                 
-                # FIX 2: Additional duplicate check by title + company
                 if job_title and company_name:
                     exists_by_content = db.query(Result).filter(
                         Result.job_title == job_title,
@@ -272,12 +296,28 @@ def process_run(run_id: str, actor_input: dict):
                         logger.info("Duplicate job (title+company), skipping: %s at %s", job_title, company_name)
                         continue
 
-                # domain via Clearbit
-                domain = clearbit_get_domain(company_name) if company_name else None
+                # DOMAIN & EMAIL DEBUGGING
+                logger.info("=== EMAIL EXTRACTION DEBUG ===")
+                logger.info("Processing company: %s", company_name)
+                
+                domain = None
                 email = None
-                if domain:
-                    emails = hunter_get_emails_for_domain(domain)
-                    email = emails[0] if emails else None
+                
+                if company_name:
+                    domain = clearbit_get_domain(company_name)
+                    logger.info("Clearbit result for '%s': %s", company_name, domain)
+                    
+                    if domain:
+                        emails = hunter_get_emails_for_domain(domain)
+                        logger.info("Hunter found %d emails for domain %s: %s", len(emails), domain, emails)
+                        email = emails[0] if emails else None
+                    else:
+                        logger.info("No domain found for company: %s", company_name)
+                else:
+                    logger.info("No company name provided for email lookup")
+                
+                logger.info("Final email result: %s", email)
+                logger.info("=== END DEBUG ===")
 
                 # persist
                 r = Result(
@@ -294,12 +334,13 @@ def process_run(run_id: str, actor_input: dict):
                 db.add(r)
                 db.commit()
                 new_rows += 1
+                
             except Exception as e:
                 logger.exception("Error processing item: %s", e)
                 db.rollback()
                 errors += 1
                 continue
-
+                
         # update run
         run.total = total
         run.new_rows = new_rows
@@ -435,6 +476,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
