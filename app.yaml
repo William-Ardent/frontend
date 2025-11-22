@@ -1,0 +1,21 @@
+name: mental-health-jobs-scraper
+services:
+- name: web
+  source_dir: /
+  github:
+    branch: main
+    repo: William-Ardent/frontend
+  run_command: gunicorn --bind 0.0.0.0:8080 main:app
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_request_path: /
+  routes:
+  - path: /
+  envs:
+  - key: PORT
+    value: "8080"
+  - key: FLASK_ENV
+    value: production
+  - key: FRONTEND_PATH
+    value: "frontend.html"
