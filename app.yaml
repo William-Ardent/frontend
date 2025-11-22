@@ -5,7 +5,7 @@ services:
   github:
     branch: main
     repo: William-Ardent/frontend
-  run_command: gunicorn --bind 0.0.0.0:8080 main:app
+  # REMOVE THIS LINE: run_command: python main.py
   environment_slug: python
   instance_count: 1
   instance_size_slug: basic-xxs
