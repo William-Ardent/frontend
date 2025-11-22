@@ -215,24 +215,31 @@ def hunter_get_emails_for_domain(domain: str):
                 continue
                 
             # Look for HR, recruitment, careers, jobs in the email or position
-            position = email_data.get("position", "").lower()
+            position = email_data.get("position") or ""
+            position_lower = position.lower() if position else ""
             email_local = email_value.split('@')[0].lower()
             
             hr_keywords = ['hr', 'recruit', 'career', 'job', 'talent', 'hiring', 'people', 'human resources']
-            if any(keyword in position or any(keyword in email_local for keyword in hr_keywords)):
+            
+            # Check if any HR keyword appears in position or email local part
+            is_hr_email = any(
+                keyword in position_lower or keyword in email_local 
+                for keyword in hr_keywords
+            )
+            
+            if is_hr_email:
                 prioritized_emails.append(email_value)
             else:
                 other_emails.append(email_value)
         
         # Return prioritized emails first, then others
         result = prioritized_emails + other_emails
-        logger.info("Hunter prioritized emails for %s: %s", domain, result)
+        logger.info("Hunter found %d emails for %s: %s", len(result), domain, result)
         return result
         
     except Exception as e:
         logger.exception("Hunter lookup failed for %s: %s", domain, e)
         return []
-
 # -------------------------
 # Core background job
 # -------------------------
@@ -632,6 +639,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
