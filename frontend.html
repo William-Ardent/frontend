@@ -665,7 +665,7 @@ function wire() {
   document.getElementById('unlockBtn').onclick = async () => {
     const v = document.getElementById('adminPass').value.trim();
     try {
-      const res = await fetch('/', {
+      const res = await fetch('/auth/unlock', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ passphrase: v })
@@ -674,13 +674,19 @@ function wire() {
       if (res.ok && body.ok) {
         localStorage.setItem(LS_KEYS.AUTH, 'true');
         renderAuth();
-        toast('Unlocked (server accepted)');
+        toast('Unlocked successfully');
+        // Load data after unlock
+        await loadBackendData();
+        renderStats();
+        renderSourceFilter();
+        renderResults();
+        renderActivity();
       } else {
-        alert(body.error || 'Incorrect passphrase (server)');
+        alert(body.error || 'Incorrect passphrase');
       }
     } catch (e) {
       console.error(e);
-      alert('Network error');
+      alert('Network error - check console');
     }
   };
 
@@ -788,6 +794,7 @@ init();
 </script>
 </body>
 </html>
+
 
 
 
