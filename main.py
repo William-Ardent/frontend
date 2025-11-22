@@ -314,25 +314,22 @@ def process_run(run_id: str, actor_input: dict):
 # -------------------------
 # HTTP endpoints
 # -------------------------
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET"])
 def frontend():
-    if request.method == "POST":
-        data = request.get_json(silent=True) or {}
-        # check passphrase (example)
-        if data.get("passphrase") != "admin123":
-            return jsonify({"ok": False, "error": "bad passphrase"}), 403
-        # forward to run endpoint logic (simple way: call run_scraper handler)
-        return run_scraper()
-    # existing GET file serving code below...
-    if not os.path.isfile(FRONTEND_PATH):
-        logger.error("Frontend file not found at %s", FRONTEND_PATH)
-        return "Frontend not found on server. Set FRONTEND_PATH to correct file.", 500
-    return send_file(FRONTEND_PATH, mimetype="text/html")
+    # Serve your uploaded frontend
+    try:
+        if not os.path.isfile(FRONTEND_PATH):
+            logger.error("Frontend file not found at %s", FRONTEND_PATH)
+            return "Frontend not found on server. Set FRONTEND_PATH to correct file.", 500
+        return send_file(FRONTEND_PATH, mimetype="text/html")
+    except Exception as e:
+        logger.exception("Error serving frontend: %s", e)
+        abort(500)
 
-        
 @app.route("/<path:path>")
 def catch_all(path):
     if os.path.isfile(FRONTEND_PATH):
+        # Force HTML MIME type
         return send_file(FRONTEND_PATH, mimetype="text/html")
     abort(404)
 
@@ -420,5 +417,6 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
