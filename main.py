@@ -18,7 +18,7 @@ DATABASE_URL = "postgresql+psycopg2://avnadmin:AVNS_NqssOw97Ohpnze-RhmW@pg-17f74
 
 APIFY_TOKEN = "apify_api_5LNsBAXRbGwuLaT7M9K0gZwHfDeOzT1L202a"
 
-APIFY_ACTOR_ID = "umWOjFtkc7Id6qcBp"
+APIFY_ACTOR_ID = "hungryai/apify-scraper-linkedin"
 
 HUNTER_API_KEY = "fa610d791c0f465f27b5ee63dbbd492de330f522"
 
@@ -118,7 +118,13 @@ def run_apify_actor(should_wait: bool = True, run_input: Optional[dict] = None):
     logger.info("Triggering Apify actor %s", APIFY_ACTOR_ID)
     
     r = requests.post(run_url, json=payload, headers=headers, timeout=30)
+
+            # LOG RESPONSE FOR DIAGNOSIS
+    if r.status_code >= 400:
+        logger.error("Apify run POST failed: status=%s url=%s", r.status_code, run_url)
+        logger.error("Response content: %s", r.text)
     r.raise_for_status()
+   
     run_obj = r.json()
     run_id = run_obj.get("data", {}).get("id") or run_obj.get("id")
     logger.info("Apify actor started: run_id=%s", run_id)
@@ -476,6 +482,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
