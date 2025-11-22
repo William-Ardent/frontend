@@ -408,29 +408,179 @@ def run_scraper():
     initiated_by = payload.get("initiatedBy", "frontend")
     note = payload.get("note", "")
     
-    # Add this - proper Apify input
-    actor_input = {
-        "keywords": "medical billing healthcare billing insurance billing revenue cycle mental health behavioral health psychiatry therapist counselor psychology medical coder billing specialist",
-        "location": "United States", 
-        "maxJobs": 50,  # Change to 1 for testing, then 30 later
-        "days": 3
-    }
+    # Define keyword groups to search sequentially
+    keyword_groups = [
+        "medical billing mental health",
+        "behavioral health billing", 
+        "psychiatry billing",
+        "therapy billing",
+        "mental health therapist",
+        "healthcare billing specialist",
+        "medical coder mental health",
+        "insurance billing behavioral health",
+        "revenue cycle mental health",
+        "psychology billing"
+    ]
     
     db = SessionLocal()
     try:
-        new_run = Run(status="running", initiated_by=initiated_by, note=note, meta={"actor_input": actor_input})
+        # Create a main run record
+        new_run = Run(
+            status="running", 
+            initiated_by=initiated_by, 
+            note=note, 
+            meta={"keyword_groups": keyword_groups, "total_keywords": len(keyword_groups)}
+        )
         db.add(new_run)
         db.commit()
         run_id = new_run.id
         
-        # Pass actor_input to process_run
-        executor.submit(process_run, run_id, actor_input)
+        # Submit background job with all keyword groups
+        executor.submit(process_run_sequential, run_id, keyword_groups)
         
-        return jsonify({"ok": True, "run_id": run_id}), 202
+        return jsonify({"ok": True, "run_id": run_id, "keyword_groups": len(keyword_groups)}), 202
     except Exception as e:
         logger.exception("Failed creating run")
         db.rollback()
         return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
+def process_run_sequential(run_id: str, keyword_groups: list):
+    """
+    Process multiple keyword groups sequentially, stopping when we reach ~50 total jobs
+    """
+    logger.info("Sequential background job starting run_id=%s with %d keyword groups", run_id, len(keyword_groups))
+    
+    db = SessionLocal()
+    try:
+        run = db.query(Run).get(run_id)
+        if not run:
+            logger.error("Run not found in DB: %s", run_id)
+            return
+
+        total_new_rows = 0
+        total_processed = 0
+        total_errors = 0
+        processed_keywords = []
+        
+        # Process each keyword group until we reach ~50 total new jobs
+        for keyword_group in keyword_groups:
+            if total_new_rows >= 45:  # Stop when we're close to 50 to avoid going over
+                logger.info("Reached target of ~50 new jobs, stopping keyword processing")
+                break
+                
+            logger.info("Processing keyword group: '%s'", keyword_group)
+            processed_keywords.append(keyword_group)
+            
+            actor_input = {
+                "keywords": keyword_group,
+                "location": "United States", 
+                "maxJobs": 15,  # Get 15 jobs per keyword to avoid hitting LinkedIn limits
+                "days": 30
+            }
+            
+            try:
+                # Trigger Apify for this keyword group
+                apify_data = run_apify_actor(should_wait=True, run_input=actor_input)
+                logger.info("Apify run completed for '%s'", keyword_group)
+                
+                # Fetch results
+                items = fetch_apify_results_from_run_data(apify_data)
+                logger.info("Fetched %d raw items for keyword '%s'", len(items), keyword_group)
+                
+                # Process items
+                keyword_new_rows = 0
+                keyword_errors = 0
+                
+                for item in items:
+                    total_processed += 1
+                    try:
+                        # Extract fields (same as original process_run)
+                        job_title = item.get("job_title") or item.get("title") or item.get("position")
+                        company_name = item.get("company_name") or item.get("company") or item.get("employer")
+                        job_url = item.get("url") or item.get("job_url") or item.get("link")
+                        location = item.get("location") or item.get("company_location")
+                        raw = item
+
+                        if not job_url:
+                            logger.warning("Skipping item with no job_url: %s", item)
+                            keyword_errors += 1
+                            continue
+
+                        # Duplicate checks
+                        exists = db.query(Result).filter(Result.job_url == job_url).first()
+                        if exists:
+                            continue
+                        
+                        if job_title and company_name:
+                            exists_by_content = db.query(Result).filter(
+                                Result.job_title == job_title,
+                                Result.company_name == company_name
+                            ).first()
+                            if exists_by_content:
+                                continue
+
+                        # Domain & email extraction (same as original)
+                        domain = clearbit_get_domain(company_name) if company_name else None
+                        email = None
+                        if domain:
+                            emails = hunter_get_emails_for_domain(domain)
+                            email = emails[0] if emails else None
+
+                        # Save to database
+                        r = Result(
+                            job_title=job_title,
+                            company_name=company_name,
+                            company_domain=domain,
+                            company_location=location,
+                            job_url=job_url,
+                            description=item.get("description") or item.get("summary"),
+                            email=email,
+                            source=item.get("source") or "apify",
+                            raw=raw
+                        )
+                        db.add(r)
+                        db.commit()
+                        keyword_new_rows += 1
+                        total_new_rows += 1
+                        
+                    except Exception as e:
+                        logger.exception("Error processing item: %s", e)
+                        db.rollback()
+                        keyword_errors += 1
+                        continue
+                
+                total_errors += keyword_errors
+                logger.info("Keyword '%s': %d new, %d errors", keyword_group, keyword_new_rows, keyword_errors)
+                
+                # Small delay between keyword searches to be respectful
+                time.sleep(2)
+                
+            except Exception as e:
+                logger.exception("Apify failed for keyword '%s': %s", keyword_group, e)
+                total_errors += 1
+                continue
+
+        # Update run with final results
+        run.total = total_processed
+        run.new_rows = total_new_rows
+        run.errors = total_errors
+        run.status = "success"
+        run.finished_at = func.now()
+        run.meta = {
+            "processed_keywords": processed_keywords,
+            "total_keywords_attempted": len(processed_keywords),
+            "final_new_jobs": total_new_rows
+        }
+        db.add(run)
+        db.commit()
+        
+        logger.info("Sequential job finished run_id=%s total_processed=%d new=%d errors=%d", 
+                   run_id, total_processed, total_new_rows, total_errors)
+        
+    except Exception:
+        logger.exception("Unexpected error in process_run_sequential")
     finally:
         db.close()
 
@@ -482,6 +632,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
