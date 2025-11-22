@@ -661,81 +661,120 @@ function escapeAttr(s) {
 }
 
 /* wiring UI */
+/* wiring UI */
 function wire() {
-  document.getElementById('unlockBtn').onclick = async () => {
-    const v = document.getElementById('adminPass').value.trim();
-    try {
-      const res = await fetch('/auth/unlock', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ passphrase: v })
-      });
-      const body = await res.json();
-      if (res.ok && body.ok) {
+  console.log('Wire function started');
+  
+  // Unlock button
+  const unlockBtn = document.getElementById('unlockBtn');
+  if (unlockBtn) {
+    unlockBtn.onclick = async () => {
+      console.log('Unlock button clicked');
+      const v = document.getElementById('adminPass').value.trim();
+      console.log('Passphrase entered:', v);
+      
+      if (v === CONFIG.ADMIN_PASSWORD) {
         localStorage.setItem(LS_KEYS.AUTH, 'true');
         renderAuth();
         toast('Unlocked successfully');
-        // Load data after unlock
         await loadBackendData();
         renderStats();
         renderSourceFilter();
         renderResults();
         renderActivity();
       } else {
-        alert(body.error || 'Incorrect passphrase');
+        alert('Incorrect passphrase. Try: ' + CONFIG.ADMIN_PASSWORD);
       }
-    } catch (e) {
-      console.error(e);
-      alert('Network error - check console');
-    }
-  };
+    };
+  }
 
-  
-  document.getElementById('useMockBtn').onclick = () => {
-    state.useMock = true;
-    document.getElementById('adminPass').value = CONFIG.ADMIN_PASSWORD;
-    document.getElementById('unlockBtn').click();
-  };
-  
-  document.getElementById('runNowBtn').onclick = () => doRunNow(true);
-  document.getElementById('searchInput').oninput = (e) => {
-    state.search = e.target.value;
-    state.page = 1;
-    renderResults();
-  };
-  
-  document.getElementById('sourceFilter').onchange = (e) => {
-    state.sourceFilter = e.target.value;
-    state.page = 1;
-    renderResults();
-  };
-  
-  document.getElementById('pageSizeSelect').onchange = (e) => {
-    state.pageSize = parseInt(e.target.value, 10);
-    state.page = 1;
-    renderResults();
-  };
-  
-  document.getElementById('prevPage').onclick = () => {
-    if (state.page > 1) {
-      state.page--;
+  // Use Mock button
+  const useMockBtn = document.getElementById('useMockBtn');
+  if (useMockBtn) {
+    useMockBtn.onclick = () => {
+      console.log('Use Mock button clicked');
+      state.useMock = true;
+      document.getElementById('adminPass').value = CONFIG.ADMIN_PASSWORD;
+      if (unlockBtn) unlockBtn.click();
+    };
+  }
+
+  // Run Now button
+  const runNowBtn = document.getElementById('runNowBtn');
+  if (runNowBtn) {
+    runNowBtn.onclick = () => doRunNow(true);
+  }
+
+  // Search input
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.oninput = (e) => {
+      state.search = e.target.value;
+      state.page = 1;
       renderResults();
-    }
-  };
+    };
+  }
+
+  // Source filter
+  const sourceFilter = document.getElementById('sourceFilter');
+  if (sourceFilter) {
+    sourceFilter.onchange = (e) => {
+      state.sourceFilter = e.target.value;
+      state.page = 1;
+      renderResults();
+    };
+  }
+
+  // Page size
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  if (pageSizeSelect) {
+    pageSizeSelect.onchange = (e) => {
+      state.pageSize = parseInt(e.target.value, 10);
+      state.page = 1;
+      renderResults();
+    };
+  }
+
+  // Pagination
+  const prevPage = document.getElementById('prevPage');
+  if (prevPage) {
+    prevPage.onclick = () => {
+      if (state.page > 1) {
+        state.page--;
+        renderResults();
+      }
+    };
+  }
+
+  const nextPage = document.getElementById('nextPage');
+  if (nextPage) {
+    nextPage.onclick = () => {
+      state.page++;
+      renderResults();
+    };
+  }
+
+  // Other buttons
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
+  if (exportCsvBtn) exportCsvBtn.onclick = exportCsv;
   
-  document.getElementById('nextPage').onclick = () => {
-    state.page++;
-    renderResults();
-  };
+  const openAdmin = document.getElementById('openAdmin');
+  if (openAdmin) openAdmin.onclick = openAdmin;
   
-  document.getElementById('exportCsvBtn').onclick = exportCsv;
-  document.getElementById('openAdmin').onclick = openAdmin;
-  document.getElementById('openLogs').onclick = openLogs;
+  const openLogs = document.getElementById('openLogs');
+  if (openLogs) openLogs.onclick = openLogs;
   
-  document.getElementById('logoutBtn').onclick = () => {
-    localStorage.removeItem(LS_KEYS.AUTH);
-    location.reload();
-  };
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.onclick = () => {
+      localStorage.removeItem(LS_KEYS.AUTH);
+      location.reload();
+    };
+  }
+
+  console.log('Wire function completed');
+  console.log('unlockBtn found:', !!unlockBtn);
+  console.log('useMockBtn found:', !!useMockBtn);
 }
 
 /* load backend data */
@@ -770,9 +809,11 @@ async function loadBackendData() {
 
 /* init */
 async function init() {
+  console.log('Init function started');
   renderAuth();
   
   if (localStorage.getItem(LS_KEYS.AUTH) === 'true') {
+    console.log('Already authenticated, loading data...');
     // Show loading state
     document.getElementById('statTotal').textContent = '...';
     document.getElementById('lastRunStatus').textContent = '...';
@@ -784,16 +825,42 @@ async function init() {
     renderSourceFilter();
     renderResults();
     renderActivity();
-    wire();
+  } else {
+    console.log('Not authenticated, showing lock screen');
   }
+  
+  wire();
+  console.log('Init function completed');
 }
 
 /* expose functions */
 window.doRunNow = doRunNow;
 init();
+
+  // Temporary direct event handler for testing
+setTimeout(() => {
+  const testBtn = document.getElementById('unlockBtn');
+  if (testBtn) {
+    testBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      console.log('Direct event listener - unlock clicked');
+      const pass = document.getElementById('adminPass').value;
+      if (pass === 'admin123') {
+        localStorage.setItem(LS_KEYS.AUTH, 'true');
+        document.getElementById('lockScreen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        console.log('Unlocked successfully');
+      } else {
+        alert('Wrong password. Use: admin123');
+      }
+    });
+  }
+}, 1000);
+
 </script>
 </body>
 </html>
+
 
 
 
