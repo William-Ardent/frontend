@@ -18,7 +18,7 @@ DATABASE_URL = "postgresql+psycopg2://avnadmin:AVNS_NqssOw97Ohpnze-RhmW@pg-17f74
 
 APIFY_TOKEN = "apify_api_5LNsBAXRbGwuLaT7M9K0gZwHfDeOzT1L202a"
 
-APIFY_ACTOR_ID = "hungryai/apify-scraper-linkedin"
+APIFY_ACTOR_ID = "umWOjFtkc7Id6qcBp"
 
 HUNTER_API_KEY = "fa610d791c0f465f27b5ee63dbbd492de330f522"
 
