@@ -197,6 +197,7 @@
     ? window.location.origin
     : (window.location.protocol + '//' + window.location.host);
 
+  // Use the same origin for API calls (no CORS issues)
   const API_BASE = origin.replace(/\/$/, '');
   const WEBHOOK_RUN = API_BASE + '/webhook/run-scraper';
 
@@ -775,3 +776,4 @@ init();
 </script>
 </body>
 </html>
+
