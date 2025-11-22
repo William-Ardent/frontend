@@ -111,7 +111,6 @@ def run_apify_actor(should_wait: bool = True, run_input: Optional[dict] = None):
 
     headers = {"Authorization": f"Bearer {APIFY_TOKEN}", "Content-Type": "application/json"}
     
-    # Remove token from URL - use only Bearer authentication
     run_url = f"https://api.apify.com/v2/acts/{APIFY_ACTOR_ID}/runs"
     
     payload = run_input or {}
@@ -119,7 +118,6 @@ def run_apify_actor(should_wait: bool = True, run_input: Optional[dict] = None):
     
     r = requests.post(run_url, json=payload, headers=headers, timeout=30)
 
-            # LOG RESPONSE FOR DIAGNOSIS
     if r.status_code >= 400:
         logger.error("Apify run POST failed: status=%s url=%s", r.status_code, run_url)
         logger.error("Response content: %s", r.text)
@@ -130,23 +128,73 @@ def run_apify_actor(should_wait: bool = True, run_input: Optional[dict] = None):
     logger.info("Apify actor started: run_id=%s", run_id)
 
     if not should_wait:
-        return run_obj
+        return run_obj  # Return immediately without waiting
 
-    # Poll for completion - also remove token from status URL
-    start = time.time()
-    status_url = f"https://api.apify.com/v2/actor-runs/{run_id}"
+    # If should_wait is True, use the new wait function
+    return wait_for_apify_completion(run_id)
+
+def process_partial_items(partial_items, db, run):
+    """Process partial items from an aborted Apify run"""
+    keyword_new_rows = 0
+    keyword_errors = 0
     
-    while True:
-        r2 = requests.get(status_url, headers=headers, timeout=30)
-        r2.raise_for_status()
-        data = r2.json().get("data", {})
-        status = data.get("status")
-        if status in ("SUCCEEDED", "FAILED", "ABORTED"):
-            logger.info("Apify run finished with status=%s", status)
-            return data
-        if time.time() - start > APIFY_RUN_TIMEOUT:
-            raise TimeoutError("Apify run timed out")
-        time.sleep(APIFY_POLL_INTERVAL)
+    for item in partial_items:
+        try:
+            # Extract fields (same as original process_run)
+            job_title = item.get("job_title") or item.get("title") or item.get("position")
+            company_name = item.get("company_name") or item.get("company") or item.get("employer")
+            job_url = item.get("url") or item.get("job_url") or item.get("link")
+            location = item.get("location") or item.get("company_location")
+            raw = item
+
+            if not job_url:
+                logger.warning("Skipping item with no job_url: %s", item)
+                keyword_errors += 1
+                continue
+
+            # Duplicate checks
+            exists = db.query(Result).filter(Result.job_url == job_url).first()
+            if exists:
+                continue
+            
+            if job_title and company_name:
+                exists_by_content = db.query(Result).filter(
+                    Result.job_title == job_title,
+                    Result.company_name == company_name
+                ).first()
+                if exists_by_content:
+                    continue
+
+            # Domain & email extraction (same as original)
+            domain = clearbit_get_domain(company_name) if company_name else None
+            email = None
+            if domain:
+                emails = hunter_get_emails_for_domain(domain)
+                email = emails[0] if emails else None
+
+            # Save to database
+            r = Result(
+                job_title=job_title,
+                company_name=company_name,
+                company_domain=domain,
+                company_location=location,
+                job_url=job_url,
+                description=item.get("description") or item.get("summary"),
+                email=email,
+                source=item.get("source") or "apify",
+                raw=raw
+            )
+            db.add(r)
+            db.commit()
+            keyword_new_rows += 1
+            
+        except Exception as e:
+            logger.exception("Error processing partial item: %s", e)
+            db.rollback()
+            keyword_errors += 1
+            continue
+    
+    return keyword_new_rows, keyword_errors
 
 def fetch_apify_results_from_run_data(run_data: dict):
     """
@@ -487,12 +535,18 @@ def process_run_sequential(run_id: str, keyword_groups: list):
                 "days": 30
             }
             
+            apify_run_id = None
             try:
-                # Trigger Apify for this keyword group
-                apify_data = run_apify_actor(should_wait=True, run_input=actor_input)
-                logger.info("Apify run completed for '%s'", keyword_group)
+                # Trigger Apify for this keyword group BUT DON'T WAIT for completion
+                apify_run_obj = run_apify_actor(should_wait=False, run_input=actor_input)
+                apify_run_id = apify_run_obj.get("data", {}).get("id") or apify_run_obj.get("id")
+                logger.info("Apify actor started: run_id=%s", apify_run_id)
                 
-                # Fetch results
+                # Now wait for completion with timeout
+                apify_data = wait_for_apify_completion(apify_run_id)
+                logger.info("Apify run completed for '%s' with status=%s", keyword_group, apify_data.get("status"))
+                
+                # Fetch results even if aborted - Apify may have partial data
                 items = fetch_apify_results_from_run_data(apify_data)
                 logger.info("Fetched %d raw items for keyword '%s'", len(items), keyword_group)
                 
@@ -566,6 +620,25 @@ def process_run_sequential(run_id: str, keyword_groups: list):
                 
             except Exception as e:
                 logger.exception("Apify failed for keyword '%s': %s", keyword_group, e)
+                
+                # CRITICAL: Even if Apify run failed/aborted, try to fetch partial results
+                if apify_run_id:
+                    try:
+                        logger.info("Attempting to fetch partial results from aborted run: %s", apify_run_id)
+                        partial_items = fetch_partial_results(apify_run_id)
+                        if partial_items:
+                            logger.info("Found %d partial items from aborted run", len(partial_items))
+                            # Process the partial items
+                            partial_new_rows, partial_errors = process_partial_items(partial_items, db, run)
+                            keyword_new_rows += partial_new_rows
+                            keyword_errors += partial_errors
+                            total_new_rows += partial_new_rows
+                            total_errors += partial_errors
+                            logger.info("Processed %d partial items, %d new, %d errors", 
+                                      len(partial_items), partial_new_rows, partial_errors)
+                    except Exception as partial_error:
+                        logger.warning("Failed to fetch partial results: %s", partial_error)
+                
                 total_errors += 1
                 continue
 
@@ -573,7 +646,7 @@ def process_run_sequential(run_id: str, keyword_groups: list):
         run.total = total_processed
         run.new_rows = total_new_rows
         run.errors = total_errors
-        run.status = "success"
+        run.status = "success" if total_processed > 0 else "partial"
         run.finished_at = func.now()
         run.meta = {
             "processed_keywords": processed_keywords,
@@ -591,6 +664,61 @@ def process_run_sequential(run_id: str, keyword_groups: list):
     finally:
         db.close()
 
+def wait_for_apify_completion(run_id: str):
+    """Wait for Apify run to complete, but handle aborted state gracefully"""
+    headers = {"Authorization": f"Bearer {APIFY_TOKEN}"}
+    status_url = f"https://api.apify.com/v2/actor-runs/{run_id}"
+    
+    start = time.time()
+    while True:
+        r = requests.get(status_url, headers=headers, timeout=30)
+        r.raise_for_status()
+        data = r.json().get("data", {})
+        status = data.get("status")
+        
+        # Consider both successful completion and aborted as "done"
+        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+            logger.info("Apify run finished with status=%s", status)
+            return data
+            
+        if time.time() - start > APIFY_RUN_TIMEOUT:
+            # Don't raise error, just return current state
+            logger.warning("Apify run timeout reached, returning current state")
+            return data
+            
+        time.sleep(APIFY_POLL_INTERVAL)
+
+def fetch_partial_results(run_id: str):
+    """Attempt to fetch results from an Apify run even if it was aborted"""
+    headers = {"Authorization": f"Bearer {APIFY_TOKEN}"}
+    
+    # First get the run details to find the dataset ID
+    run_url = f"https://api.apify.com/v2/actor-runs/{run_id}"
+    try:
+        r = requests.get(run_url, headers=headers, timeout=30)
+        r.raise_for_status()
+        run_data = r.json().get("data", {})
+        
+        dataset_id = run_data.get("defaultDatasetId")
+        if not dataset_id:
+            logger.warning("No dataset ID found for run %s", run_id)
+            return []
+            
+        # Try to fetch from dataset
+        items_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items"
+        r2 = requests.get(items_url, headers=headers, timeout=30)
+        if r2.status_code == 200:
+            items = r2.json()
+            logger.info("Successfully fetched %d partial items from aborted run", len(items))
+            return items
+        else:
+            logger.warning("Failed to fetch dataset items: status=%s", r2.status_code)
+            return []
+            
+    except Exception as e:
+        logger.warning("Failed to fetch partial results: %s", e)
+        return []
+        
 @app.route("/webhook/get-results", methods=["GET"])
 def get_results():
     # pagination
@@ -639,6 +767,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
