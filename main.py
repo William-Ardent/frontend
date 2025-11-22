@@ -207,6 +207,8 @@ def hunter_get_emails_for_domain(domain: str):
 # -------------------------
 def process_run(run_id: str, actor_input: dict):
     logger.info("Background job starting run_id=%s", run_id)
+    logger.info("Apify actor input: %s", json.dumps(actor_input, indent=2)) 
+    
     db = SessionLocal()
     try:
         run = db.query(Run).get(run_id)
@@ -217,6 +219,7 @@ def process_run(run_id: str, actor_input: dict):
         # Trigger Apify
         try:
             apify_data = run_apify_actor(should_wait=True, run_input=actor_input)
+            logger.info("Apify run completed: %s", json.dumps(apify_data, indent=2))
         except Exception as e:
             logger.exception("Apify actor failed")
             run.status = "failed"
@@ -229,6 +232,7 @@ def process_run(run_id: str, actor_input: dict):
         # fetch results items
         try:
             items = fetch_apify_results_from_run_data(apify_data)
+            logger.info("Fetched %d raw items from Apify", len(items))
         except Exception as e:
             logger.exception("Failed fetching Apify results")
             items = []
@@ -361,7 +365,7 @@ def run_scraper():
     actor_input = {
         "keywords": "medical billing, mental health billing, behavioral health billing, psychiatry billing",
         "location": "United States", 
-        "maxJobs": 30,  # Change to 1 for testing, then 30 later
+        "maxJobs": 50,  # Change to 1 for testing, then 30 later
         "days": 3
     }
     
@@ -431,6 +435,7 @@ def list_runs():
 if __name__ == "__main__":
     logger.info("Starting Flask app on port %s", PORT)
     app.run(host="0.0.0.0", port=PORT, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+
 
 
 
